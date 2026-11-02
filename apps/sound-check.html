@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Test beeps, spoken cues and screen-awake on this device before a live training session.">
+<meta name="theme-color" content="#0e7a45">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Sound Check</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9A%BD%3C/text%3E%3C/svg%3E">
+<style>
+/* SHARED:base.css BEGIN — generated from shared/base.css; edit that file, then run node scripts/sync-shared.mjs */
+/* Shared look for every app: tokens, layout, buttons, form controls, live-session screen.
+   App-specific styles go in a second <style> block after this one. */
+:root {
+  color-scheme: light dark;
+  --bg: #f3f6f2;
+  --surface: #ffffff;
+  --surface-2: #e7eee9;
+  --text: #0f1d15;
+  --muted: #536259;
+  --line: #d1dbd4;
+  --accent: #0e7a45;
+  --accent-ink: #ffffff;
+  --danger: #b3261e;
+  --danger-ink: #ffffff;
+  --radius: 14px;
+  --gutter: 16px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b110e;
+    --surface: #151e19;
+    --surface-2: #1e2a23;
+    --text: #ecf3ee;
+    --muted: #98a79e;
+    --line: #2b3731;
+    --accent: #3cc77f;
+    --accent-ink: #03140a;
+    --danger: #ff7a6e;
+    --danger-ink: #1c0504;
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px; /* never smaller on inputs, or iOS zooms on focus */
+  line-height: 1.45;
+  -webkit-tap-highlight-color: transparent;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+[hidden] { display: none !important; }
+
+.wrap { width: 100%; max-width: 640px; margin: 0 auto; padding: var(--gutter); }
+h1 { font-size: 1.6rem; line-height: 1.2; margin: 8px 0 12px; }
+h2 { font-size: 1.1rem; line-height: 1.3; margin: 0 0 12px; }
+p { margin: 0 0 12px; }
+a { color: var(--accent); }
+.muted { color: var(--muted); }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--gutter);
+  margin-bottom: var(--gutter);
+}
+.stack > * { margin-top: 0; margin-bottom: 0; }
+.stack > * + * { margin-top: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+.row > * { flex: 1 1 0; min-width: 0; }
+
+button, .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+button:active, .button:active { transform: scale(0.98); }
+button:disabled { opacity: 0.5; cursor: default; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.danger { background: var(--danger); color: var(--danger-ink); border-color: transparent; }
+.big { width: 100%; min-height: 80px; font-size: 1.5rem; }
+
+label { display: block; font-weight: 600; margin-bottom: 6px; }
+input, select {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 12px;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+input[type="range"] { min-height: 36px; padding: 0; border: 0; background: none; accent-color: var(--accent); }
+input[type="checkbox"], input[type="radio"] { width: 22px; min-height: 22px; accent-color: var(--accent); }
+
+/* Live-session screen: full height, one huge cue in the middle, Stop at the bottom. */
+.session {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gutter);
+  min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  padding: var(--gutter);
+}
+.cue-area { flex: 1; display: grid; place-items: center; }
+.cue {
+  font-size: clamp(3.5rem, 22vw, 10rem);
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+/* SHARED:base.css END */
+</style>
+<style>
+.checks { list-style: none; margin: 0; padding: 0; }
+.checks li { display: grid; grid-template-columns: 28px 1fr; gap: 4px 8px; padding: 8px 0; border-top: 1px solid var(--line); }
+.checks li:first-child { border-top: 0; padding-top: 0; }
+.checks .mark { font-weight: 800; }
+.checks .ok { color: var(--accent); }
+.checks .no { color: var(--danger); }
+.checks .info { color: var(--muted); }
+.checks .hint { grid-column: 2; color: var(--muted); font-size: 0.95rem; }
+.tips { margin: 0; padding-left: 20px; }
+.tips li + li { margin-top: 6px; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <p><a href="../index.html">← All apps</a></p>
+  <h1>Sound check</h1>
+  <p class="muted">Run this on the phone before a live session. If you can hear the beeps and the voice here, the training apps will work too.</p>
+
+  <section class="card stack">
+    <h2>1. Beeps</h2>
+    <div class="row">
+      <button data-beep="high">High</button>
+      <button data-beep="low">Low</button>
+      <button data-beep="triple">Triple</button>
+    </div>
+  </section>
+
+  <section class="card stack">
+    <h2>2. Voice</h2>
+    <div>
+      <label for="voice">Voice</label>
+      <select id="voice"><option value="">Device default</option></select>
+    </div>
+    <div>
+      <label for="rate">Speed: <span id="rateOut"></span></label>
+      <input id="rate" type="range" min="0.7" max="1.6" step="0.1">
+    </div>
+    <div class="row">
+      <button data-say="Man on!">Man on!</button>
+      <button data-say="Turn!">Turn!</button>
+      <button data-say="Time!">Time!</button>
+    </div>
+    <p id="voiceNote" class="muted">Your voice and speed are saved for the other apps opened from the same place.</p>
+  </section>
+
+  <section class="card stack">
+    <h2>3. Keep the screen on</h2>
+    <button id="awake">Keep screen awake</button>
+    <p id="awakeOut" class="muted" hidden></p>
+  </section>
+
+  <section class="card">
+    <h2>This device</h2>
+    <ul id="checks" class="checks"></ul>
+  </section>
+
+  <section class="card">
+    <h2>No sound?</h2>
+    <ul class="tips">
+      <li>Turn the volume up with the side buttons while this page is open.</li>
+      <li>If "Plays with silent switch on" shows ✗ above, flip the ring/silent switch to ring.</li>
+      <li>Check the phone isn't connected to Bluetooth headphones or a car.</li>
+      <li>Close the tab, reopen the page and tap a button again. Phone calls and app switches can pause web audio.</li>
+      <li>Outdoors, a small Bluetooth speaker makes the cues much easier to hear.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+/* SHARED:kit.js BEGIN — generated from shared/kit.js; edit that file, then run node scripts/sync-shared.mjs */
+/* Soccer Training Kit: small helpers shared by every app, exposed as window.Kit.
+   Audio cues (beep, speak), screen wake lock, abortable timing, randomness and
+   localStorage preferences. Built for iPhone Safari first; no network, works from file://. */
+(function () {
+  'use strict';
+
+  // ---- Preferences (localStorage, namespaced, never throws) -----------------
+  const PREFIX = 'stk:';
+  const store = {
+    get(key, fallback) {
+      try {
+        const raw = localStorage.getItem(PREFIX + key);
+        return raw === null ? fallback : JSON.parse(raw);
+      } catch (e) { return fallback; }
+    },
+    set(key, value) {
+      try { localStorage.setItem(PREFIX + key, JSON.stringify(value)); } catch (e) { /* private mode, file:// quirks */ }
+    },
+  };
+
+  // ---- Audio ----------------------------------------------------------------
+  let ctx = null;
+  let speechPrimed = false;
+
+  function audio() {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // iOS suspends or "interrupts" the context after calls and app switches.
+    if (ctx.state !== 'running') ctx.resume().catch(() => {});
+    return ctx;
+  }
+
+  // Call inside a tap/click handler before the first cue: iOS won't start audio
+  // or speech any other way. Safe to call repeatedly.
+  function unlock() {
+    // iOS 17+: behave like a media app so the ring/silent switch doesn't mute cues.
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    const c = audio();
+    const src = c.createBufferSource(); // a silent sample wakes the output route
+    src.buffer = c.createBuffer(1, 1, 22050);
+    src.connect(c.destination);
+    src.start(0);
+    if (!speechPrimed && 'speechSynthesis' in window) {
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0;
+      speechSynthesis.speak(u);
+      speechPrimed = true;
+    }
+  }
+
+  // A short tone. Square waves carry best through phone speakers outdoors.
+  // `delay` (ms) schedules on the audio clock, so patterns stay tight.
+  function beep({ freq = 1000, ms = 150, volume = 0.5, type = 'square', delay = 0 } = {}) {
+    const c = audio();
+    const start = c.currentTime + delay / 1000;
+    const end = start + ms / 1000;
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, start); // soft edges avoid clicks
+    gain.gain.linearRampToValueAtTime(volume, start + 0.008);
+    gain.gain.setValueAtTime(volume, Math.max(start + 0.008, end - 0.02));
+    gain.gain.linearRampToValueAtTime(0, end);
+    osc.connect(gain);
+    gain.connect(c.destination);
+    osc.start(start);
+    osc.stop(end + 0.05);
+  }
+
+  // n beeps in a row, e.g. beeps(3) for "go, go, go".
+  function beeps(n, { gap = 100, ms = 150, delay = 0, ...opts } = {}) {
+    for (let i = 0; i < n; i++) beep({ ...opts, ms, delay: delay + i * (ms + gap) });
+  }
+
+  // ---- Speech ---------------------------------------------------------------
+  // Voice and speed are chosen in Sound check and shared by every app on the same origin.
+  const speech = { voice: store.get('voice', null), rate: store.get('rate', 1.1) };
+
+  function voices() {
+    return 'speechSynthesis' in window ? speechSynthesis.getVoices() : [];
+  }
+
+  function setVoice(name) { speech.voice = name || null; store.set('voice', speech.voice); }
+  function setRate(rate) { speech.rate = rate; store.set('rate', rate); }
+
+  // Speak a cue, cutting off anything still being said. Resolves when done, or
+  // after a timeout because iOS sometimes never fires `end`.
+  function speak(text, { rate = speech.rate, pitch = 1, volume = 1, interrupt = true } = {}) {
+    if (!('speechSynthesis' in window)) return Promise.resolve();
+    if (interrupt && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = rate;
+    u.pitch = pitch;
+    u.volume = volume;
+    const v = speech.voice && voices().find((x) => x.name === speech.voice);
+    if (v) { u.voice = v; u.lang = v.lang; }
+    return new Promise((resolve) => {
+      const timer = setTimeout(resolve, 1500 + text.length * 150);
+      u.onend = u.onerror = () => { clearTimeout(timer); resolve(); };
+      speechSynthesis.speak(u);
+    });
+  }
+
+  function hush() {
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+  }
+
+  // ---- Screen wake lock -----------------------------------------------------
+  let lock = null;
+  let wantAwake = false;
+
+  // Keep the screen on during a live session: page JS stops when the phone locks.
+  // Resolves false when unavailable, so the app can tell the user to raise Auto-Lock.
+  async function keepAwake(on = true) {
+    wantAwake = on;
+    if (!on) {
+      if (lock) { lock.release().catch(() => {}); lock = null; }
+      return false;
+    }
+    if (!('wakeLock' in navigator)) return false;
+    if (lock && !lock.released) return true;
+    try {
+      lock = await navigator.wakeLock.request('screen');
+      return true;
+    } catch (e) { return false; }
+  }
+
+  // The browser drops the lock, and may suspend audio, whenever the page is hidden.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (wantAwake) keepAwake(true);
+    if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
+  });
+
+  // ---- Timing ---------------------------------------------------------------
+  const isAbort = (e) => !!e && e.name === 'AbortError';
+
+  // Wait `ms`; rejects with AbortError as soon as `signal` aborts.
+  function sleep(ms, signal) {
+    return new Promise((resolve, reject) => {
+      let timer;
+      const abort = () => { clearTimeout(timer); reject(new DOMException('Stopped', 'AbortError')); };
+      if (signal && signal.aborted) return abort();
+      timer = setTimeout(() => {
+        if (signal) signal.removeEventListener('abort', abort);
+        resolve();
+      }, ms);
+      if (signal) signal.addEventListener('abort', abort, { once: true });
+    });
+  }
+
+  // Run an async drill(signal) until it returns or stop() is called.
+  // `done` always resolves, so the UI can return to setup after either.
+  function run(drill) {
+    const ctrl = new AbortController();
+    const done = drill(ctrl.signal).catch((e) => { if (!isAbort(e)) console.error(e); });
+    return { stop() { ctrl.abort(); hush(); }, done };
+  }
+
+  // ---- Randomness -----------------------------------------------------------
+  const rand = (min, max) => min + Math.random() * (max - min);
+  const randInt = (min, max) => Math.floor(rand(min, max + 1));
+  const pick = (list) => list[Math.floor(Math.random() * list.length)];
+
+  function shuffle(list) {
+    const a = list.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  // ---- Environment ----------------------------------------------------------
+  function support() {
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    return {
+      ios,
+      webAudio: !!(window.AudioContext || window.webkitAudioContext),
+      speech: 'speechSynthesis' in window,
+      wakeLock: 'wakeLock' in navigator,
+      silentSwitchOverride: 'audioSession' in navigator,
+      standalone: matchMedia('(display-mode: standalone)').matches || navigator.standalone === true,
+      fromFile: location.protocol === 'file:',
+    };
+  }
+
+  window.Kit = {
+    unlock, beep, beeps,
+    speak, hush, voices, setVoice, setRate, speech,
+    keepAwake,
+    sleep, run, isAbort,
+    rand, randInt, pick, shuffle,
+    store, support,
+  };
+})();
+/* SHARED:kit.js END */
+</script>
+<script>
+const $ = (sel) => document.querySelector(sel);
+
+// ---- Beeps ------------------------------------------------------------------
+const BEEPS = {
+  high: () => Kit.beep({ freq: 1200, ms: 200 }),
+  low: () => Kit.beep({ freq: 500, ms: 300 }),
+  triple: () => Kit.beeps(3, { freq: 1000, ms: 120, gap: 90 }),
+};
+document.querySelectorAll('[data-beep]').forEach((btn) => {
+  btn.addEventListener('click', () => { Kit.unlock(); BEEPS[btn.dataset.beep](); });
+});
+
+// ---- Voice ------------------------------------------------------------------
+const voiceSel = $('#voice');
+const rate = $('#rate');
+const voiceNote = $('#voiceNote');
+const SAVED_NOTE = voiceNote.textContent;
+
+function fillVoices() {
+  const lang = (navigator.language || 'en').split('-')[0];
+  const all = Kit.voices();
+  const mine = all.filter((v) => v.lang.toLowerCase().startsWith(lang));
+  const list = (mine.length ? mine : all).slice().sort((a, b) => a.name.localeCompare(b.name));
+  voiceSel.length = 1; // keep "Device default"
+  for (const v of list) voiceSel.add(new Option(`${v.name} (${v.lang})`, v.name));
+  voiceSel.value = list.some((v) => v.name === Kit.speech.voice) ? Kit.speech.voice : '';
+  voiceNote.textContent = all.length ? SAVED_NOTE
+    : 'No voices listed yet. Tap a phrase anyway: some browsers only load voices on first use.';
+}
+fillVoices();
+if ('speechSynthesis' in window) speechSynthesis.addEventListener('voiceschanged', fillVoices);
+
+voiceSel.addEventListener('change', () => Kit.setVoice(voiceSel.value));
+
+rate.value = Kit.speech.rate;
+const showRate = () => { $('#rateOut').textContent = `${Number(rate.value).toFixed(1)}×`; };
+showRate();
+rate.addEventListener('input', () => { showRate(); Kit.setRate(Number(rate.value)); });
+
+document.querySelectorAll('[data-say]').forEach((btn) => {
+  btn.addEventListener('click', () => { Kit.unlock(); Kit.speak(btn.dataset.say); });
+});
+
+// ---- Wake lock --------------------------------------------------------------
+let awake = false;
+$('#awake').addEventListener('click', async () => {
+  awake = !awake;
+  const ok = await Kit.keepAwake(awake);
+  const out = $('#awakeOut');
+  out.hidden = false;
+  if (!awake) {
+    out.textContent = 'Off. The screen will lock on its normal timer.';
+  } else if (ok) {
+    out.textContent = 'On. The screen stays on while this page is open.';
+  } else {
+    awake = false;
+    out.textContent = "Not supported here. Set Auto-Lock to Never (Settings → Display & Brightness) for the session.";
+  }
+  $('#awake').textContent = awake ? 'Let screen sleep' : 'Keep screen awake';
+});
+
+// ---- Device checks ----------------------------------------------------------
+const s = Kit.support();
+const rows = [
+  [s.webAudio, 'Beeps (Web Audio)'],
+  [s.speech, 'Spoken cues', 'Not available: apps will only beep.'],
+  [s.wakeLock, 'Keep screen awake', 'Not available: set Auto-Lock to Never during sessions.'],
+];
+if (s.ios || s.silentSwitchOverride) {
+  rows.push([s.silentSwitchOverride, 'Plays with silent switch on', 'Needs iOS 17 or later. Until then, switch the phone to ring.']);
+}
+const opened = s.standalone ? 'Home Screen app' : s.fromFile ? 'a local file' : 'the web';
+const checks = $('#checks');
+for (const [ok, label, hint] of rows) {
+  const li = document.createElement('li');
+  li.innerHTML = `<span class="mark ${ok ? 'ok' : 'no'}">${ok ? '✓' : '✗'}</span><span></span>`;
+  li.lastChild.textContent = label;
+  if (!ok && hint) li.insertAdjacentHTML('beforeend', `<span class="hint">${hint}</span>`);
+  checks.append(li);
+}
+checks.insertAdjacentHTML('beforeend', `<li><span class="mark info">i</span><span>Opened from ${opened}</span></li>`);
+</script>
+</body>
+</html>
