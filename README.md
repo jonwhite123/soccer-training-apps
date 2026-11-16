@@ -9,7 +9,7 @@ Small training apps for soccer players. Each app is one self-contained HTML file
 
 | App | Type | What it does |
 | --- | --- | --- |
-| [Look Up and Pass](apps/look-up-and-pass.html) | Live session | Calls a direction for your first touch after you play the ball off a wall, then which coloured cone to pass to (2 to 4 stations) |
+| [Look Up and Pass](apps/look-up-and-pass.html) | Live session | Play the ball off a wall and pass to the coloured cone that's called (2 to 4 stations). *Control Touch First* calls a direction for your first touch before the cone; *One Touch Pass* calls only the cone, to pass first time |
 | [Sound check](apps/sound-check.html) | Utility | Tests beeps, the voice and screen-awake on a device before a live session |
 
 ## Running the apps
