@@ -42,7 +42,7 @@ Targets: desktop Chrome/Safari and **iPhone Safari**. Design and check for the p
 
 - Start from a big tap target whose handler calls `Kit.unlock()` and `Kit.keepAwake()` synchronously, before any `await`.
 - Every cue is both audible and visible: a beep, then speech, plus the cue text full-screen (`.cue`). Beep first because speech can lag a beat, especially the first time.
-- A Stop button is always on screen. Stopping cancels timers and speech (`Kit.run` does both) and releases the wake lock.
+- A Stop button is always on screen during a drill. Stopping cancels timers and speech through `Kit.run`. Release the wake lock when a session ends. Look Up and Pass keeps its wake lock between individual reps while the page is open.
 - Page JS stops when the screen locks or Safari goes to the background. If `keepAwake()` resolves `false`, tell the user to set Auto-Lock to Never.
 - Persist settings (timings, cue lists) with `Kit.store` so a coach sets them once.
 
@@ -63,6 +63,9 @@ Targets: desktop Chrome/Safari and **iPhone Safari**. Design and check for the p
 
 ## Verifying
 
-- Open the file through `file://` in the browser pane at the mobile preset (375×812) and at desktop size. Check for no console errors, no horizontal scroll, a working Start and Stop, and that Stop returns to setup.
-- Audio can't be heard from here. Check that calls don't throw and the flow advances; real sound gets checked on the phone with `apps/sound-check.html`.
+- Open the file through `file://` at 375×812 and at desktop size. Check for console errors and horizontal scroll. For apps with a separate session screen, check that Stop returns to setup.
+- For Look Up and Pass, shorten the shared countdown in Settings. Control Touch First should show both instructions at once and speak a single cue such as “touch back, pass yellow.” One Touch Pass should say “pass orange,” and Turn and Dribble should say “turn left dribble red.”
+- Mixed uses each drill once per shuffle. Check that each selected cone colour is called once per shuffle across all modes. Changing the cone selection starts a new cone shuffle. Consecutive cues can match at a shuffle boundary.
+- Check that the rep counter increments on completion, that stopping a rep returns to Go with the count unchanged, and that the mode, countdown and cone colours persist on reload where storage is available.
+- Use Sound check on the target phone to verify audible beeps, spoken cues and the screen wake lock. Check that the drill keeps running in the intended field setup.
 - Say plainly what has not been checked on a real iPhone.

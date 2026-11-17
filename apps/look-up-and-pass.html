@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Pass to the cone that's called: take a control touch in the called direction first, or play it one touch.">
+<meta name="description" content="Practise control touches, one-touch passes and turns with spoken cone cues. Pick one drill or mix all three.">
 <meta name="theme-color" content="#0e7a45">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -144,12 +144,15 @@ input[type="checkbox"], input[type="radio"] { width: 22px; min-height: 22px; acc
 /* Mode tabs */
 .tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
   padding: 4px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+}
+@media (min-width: 480px) {
+  .tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 .tabs [role="tab"] {
   min-height: 48px;
@@ -179,6 +182,9 @@ input[type="checkbox"], input[type="radio"] { width: 22px; min-height: 22px; acc
 }
 .arrow { font-size: clamp(4rem, 30vw, 11rem); font-weight: 800; line-height: 1; }
 .word, .target { font-size: clamp(2.5rem, 14vw, 6rem); font-weight: 800; line-height: 1.05; }
+.panel[data-state="done"] :is(.word, .target) {
+  font-size: clamp(1.75rem, 9vw, 4rem);
+}
 .arrow:empty, .word:empty, .target:empty { display: none; }
 .status { margin: 8px 0 0; color: var(--muted); max-width: 32ch; }
 .panel[data-state="wait"] .word { color: var(--muted); }
@@ -226,6 +232,8 @@ input[type="checkbox"], input[type="radio"] { width: 22px; min-height: 22px; acc
   <div class="tabs" role="tablist" aria-label="Mode">
     <button type="button" role="tab" data-mode="control">Control Touch First</button>
     <button type="button" role="tab" data-mode="oneTouch">One Touch Pass</button>
+    <button type="button" role="tab" data-mode="turnDribble">Turn and Dribble</button>
+    <button type="button" role="tab" data-mode="mixed">Mixed</button>
   </div>
 
   <div id="panel" class="panel" aria-live="assertive">
@@ -242,25 +250,9 @@ input[type="checkbox"], input[type="radio"] { width: 22px; min-height: 22px; acc
     <summary>Settings</summary>
     <div class="stack">
       <h2>Timing</h2>
-      <div class="setting" data-for="control">
-        <span id="directionAfterLabel">Direction call after Go</span>
-        <div class="stepper" role="group" aria-labelledby="directionAfterLabel" data-key="directionAfter">
-          <button type="button" aria-label="One second less">−</button>
-          <output></output>
-          <button type="button" aria-label="One second more">+</button>
-        </div>
-      </div>
-      <div class="setting" data-for="control">
-        <span id="targetAfterLabel">Cone call after direction</span>
-        <div class="stepper" role="group" aria-labelledby="targetAfterLabel" data-key="targetAfter">
-          <button type="button" aria-label="One second less">−</button>
-          <output></output>
-          <button type="button" aria-label="One second more">+</button>
-        </div>
-      </div>
-      <div class="setting" data-for="oneTouch">
-        <span id="oneTouchAfterLabel">Cone call after Go</span>
-        <div class="stepper" role="group" aria-labelledby="oneTouchAfterLabel" data-key="oneTouchAfter">
+      <div class="setting">
+        <span id="cueAfterLabel">First cue after Go</span>
+        <div id="cueAfter" class="stepper" role="group" aria-labelledby="cueAfterLabel">
           <button type="button" aria-label="One second less">−</button>
           <output></output>
           <button type="button" aria-label="One second more">+</button>
@@ -477,11 +469,7 @@ input[type="checkbox"], input[type="radio"] { width: 22px; min-height: 22px; acc
 </script>
 <script>
 // ---- Look Up and Pass ---------------------------------------------------------
-// Two modes, chosen with the tabs. Both stop after the cone call until Go is tapped again.
-//   Control Touch First: Go → wait → call a direction for the first touch (as if under
-//     pressure) → wait → call a cone colour (the pass target).
-//   One Touch Pass: Go → wait → call a cone colour as the ball comes back off the wall,
-//     to be passed first time.
+// Each Go starts one rep. In Mixed, the drill is picked when the countdown ends.
 const $ = (sel) => document.querySelector(sel);
 const STORE_KEY = 'look-up-and-pass';
 const DIRECTIONS = [
@@ -490,6 +478,7 @@ const DIRECTIONS = [
   { word: 'Back', arrow: '↓' },
   { word: 'Forward', arrow: '↑' },
 ];
+const TURNS = ['Turn full', 'Turn left', 'Turn right'];
 // Cone colours a station can use; `ink` is the text colour on top of that cone colour.
 const COLORS = {
   red: { name: 'Red', bg: '#e0352b', ink: '#ffffff' },
@@ -499,42 +488,60 @@ const COLORS = {
   blue: { name: 'Blue', bg: '#1d63d6', ink: '#ffffff' },
 };
 const STATIONS = { min: 2, max: 4 };
-const MODES = ['control', 'oneTouch'];
-const TIMINGS = {
-  directionAfter: { min: 1, max: 30 },
-  targetAfter: { min: 1, max: 15 },
-  oneTouchAfter: { min: 1, max: 30 },
+const SCENARIOS = ['control', 'oneTouch', 'turnDribble'];
+const MODES = {
+  control: {
+    instructions: 'Tap Go, find your spot and play the ball against the wall.',
+    waitStatus: 'Play the ball against the wall.',
+  },
+  oneTouch: {
+    instructions: 'Tap Go and play the ball against the wall. Pass the return first time to the cone in the cue.',
+    waitStatus: 'Play the ball against the wall.',
+  },
+  turnDribble: {
+    instructions: 'Tap Go. On the call, turn with the ball and dribble through the called cone.',
+    waitStatus: 'Get ready to turn.',
+  },
+  mixed: {
+    instructions: 'Tap Go and react to the cue. “Touch” means control in the called direction, then pass. “Pass” on its own means play first time. “Turn” means turn and dribble through the cone.',
+    waitStatus: 'Get ready for the call.',
+  },
 };
-const DEFAULTS = { mode: 'control', directionAfter: 7, targetAfter: 3, oneTouchAfter: 7, colors: ['orange', 'yellow'] };
+const CUE_DELAY = { min: 1, max: 30 };
+const DEFAULTS = {
+  mode: 'control',
+  cueAfter: 7,
+  colors: ['orange', 'yellow'],
+};
 
 const prefs = loadPrefs();
 const panel = $('#panel');
 const go = $('#go');
 const chips = $('#colors');
 const tabs = document.querySelectorAll('[role="tab"]');
+const scenarioOrder = [];
+const coneOrder = [];
+const touchOrder = [];
+const turnOrder = [];
 let rep = null; // the rep in progress, from Kit.run
 let startedAt = 0;
 let reps = 0;
 
-// Timing steppers: each tap moves one second.
-for (const stepper of document.querySelectorAll('.stepper')) {
-  const key = stepper.dataset.key;
-  const { min, max } = TIMINGS[key];
-  const [less, more] = stepper.querySelectorAll('button');
-  const show = () => {
-    stepper.querySelector('output').textContent = `${prefs[key]}s`;
-    less.disabled = prefs[key] <= min;
-    more.disabled = prefs[key] >= max;
-  };
-  const change = (by) => {
-    prefs[key] = Math.min(max, Math.max(min, prefs[key] + by));
-    savePrefs();
-    show();
-  };
-  less.addEventListener('click', () => change(-1));
-  more.addEventListener('click', () => change(1));
-  show();
-}
+const stepper = $('#cueAfter');
+const [less, more] = stepper.querySelectorAll('button');
+const showDelay = () => {
+  stepper.querySelector('output').textContent = `${prefs.cueAfter}s`;
+  less.disabled = prefs.cueAfter <= CUE_DELAY.min;
+  more.disabled = prefs.cueAfter >= CUE_DELAY.max;
+};
+const changeDelay = (by) => {
+  prefs.cueAfter = clampDelay(prefs.cueAfter + by);
+  savePrefs();
+  showDelay();
+};
+less.addEventListener('click', () => changeDelay(-1));
+more.addEventListener('click', () => changeDelay(1));
+showDelay();
 
 // Station colour chips: tap to add or remove a colour.
 for (const [id, color] of Object.entries(COLORS)) {
@@ -562,14 +569,25 @@ showMode();
 showColors();
 
 function loadPrefs() {
-  const p = { ...DEFAULTS, ...Kit.store.get(STORE_KEY, {}) };
-  if (!MODES.includes(p.mode)) p.mode = DEFAULTS.mode;
-  for (const [key, { min, max }] of Object.entries(TIMINGS)) {
-    p[key] = Number.isInteger(p[key]) ? Math.min(max, Math.max(min, p[key])) : DEFAULTS[key];
-  }
-  const colors = Array.isArray(p.colors) ? Object.keys(COLORS).filter((id) => p.colors.includes(id)) : [];
-  p.colors = colors.length >= STATIONS.min && colors.length <= STATIONS.max ? colors : DEFAULTS.colors;
-  return p;
+  const saved = Kit.store.get(STORE_KEY, {}) ?? {};
+  const mode = Object.keys(MODES).includes(saved.mode) ? saved.mode : DEFAULTS.mode;
+  // Use the last selected mode's countdown when upgrading from per-mode settings.
+  const legacyDelays = {
+    control: saved.directionAfter,
+    oneTouch: saved.oneTouchAfter,
+    turnDribble: saved.turnDribbleAfter,
+  };
+  const cueAfter = saved.cueAfter ?? legacyDelays[mode];
+  const colors = Array.isArray(saved.colors) ? Object.keys(COLORS).filter((id) => saved.colors.includes(id)) : [];
+  return {
+    mode,
+    cueAfter: Number.isInteger(cueAfter) ? clampDelay(cueAfter) : DEFAULTS.cueAfter,
+    colors: colors.length >= STATIONS.min && colors.length <= STATIONS.max ? colors : DEFAULTS.colors,
+  };
+}
+
+function clampDelay(seconds) {
+  return Math.min(CUE_DELAY.max, Math.max(CUE_DELAY.min, seconds));
 }
 
 function savePrefs() { Kit.store.set(STORE_KEY, prefs); }
@@ -579,6 +597,7 @@ function toggleColor(id) {
   if (on ? prefs.colors.length <= STATIONS.min : prefs.colors.length >= STATIONS.max) return;
   // Keep the palette order so the list always reads the same way.
   prefs.colors = Object.keys(COLORS).filter((c) => (c === id ? !on : prefs.colors.includes(c)));
+  coneOrder.length = 0;
   savePrefs();
   showColors();
 }
@@ -592,10 +611,8 @@ function showColors() {
   if (panel.dataset.state === 'idle') render({ state: 'idle', status: idleText() });
 }
 
-// Selects the current mode's tab, shows only that mode's timing settings and resets the panel.
 function showMode() {
   for (const tab of tabs) tab.setAttribute('aria-selected', String(tab.dataset.mode === prefs.mode));
-  for (const row of document.querySelectorAll('[data-for]')) row.hidden = row.dataset.for !== prefs.mode;
   render({ state: 'idle', status: idleText() });
 }
 
@@ -603,10 +620,7 @@ function showMode() {
 function idleText() {
   const names = prefs.colors.map((id) => `${id === 'orange' ? 'an' : 'a'} ${id}`);
   const list = `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-  const how = prefs.mode === 'oneTouch'
-    ? "Tap Go and play the ball against the wall, then pass the return first time to the cone that's called."
-    : 'Tap Go, find your spot and play the ball against the wall.';
-  return `Set out ${list} cone. ${how}`;
+  return `Set out ${list} cone. ${MODES[prefs.mode].instructions}`;
 }
 
 go.addEventListener('click', () => {
@@ -624,27 +638,42 @@ go.addEventListener('click', () => {
   rep.done.then(endRep);
 });
 
+// Use each option once per shuffled round. A repeat can occur at the boundary.
+function drawShuffled(options, remaining) {
+  if (!remaining.length) remaining.push(...Kit.shuffle(options));
+  return remaining.pop();
+}
+
 async function playRep(signal) {
-  const oneTouch = prefs.mode === 'oneTouch';
+  const mode = prefs.mode;
+  const { waitStatus } = MODES[mode];
   Kit.beep({ freq: 660, ms: 80, volume: 0.3 }); // quiet tick: Go registered
-  for (let s = oneTouch ? prefs.oneTouchAfter : prefs.directionAfter; s > 0; s--) {
-    render({ state: 'wait', word: String(s), status: 'Play the ball against the wall.' });
+  for (let s = prefs.cueAfter; s > 0; s--) {
+    render({ state: 'wait', word: String(s), status: waitStatus });
     await Kit.sleep(1000, signal);
   }
 
-  let dir = null; // One Touch Pass skips the control touch and its delay
-  if (!oneTouch) {
-    dir = Kit.pick(DIRECTIONS);
-    render({ state: 'direction', arrow: dir.arrow, word: dir.word, status: 'Take your touch…' });
-    Kit.beep({ freq: 1200, ms: 100 }); // beep first: speech can lag a beat
-    Kit.speak(dir.word);
-    await Kit.sleep(prefs.targetAfter * 1000, signal);
+  const scenario = mode === 'mixed' ? drawShuffled(SCENARIOS, scenarioOrder) : mode;
+  const target = COLORS[drawShuffled(prefs.colors, coneOrder)];
+  const colour = target.name.toLowerCase();
+  let arrow = '';
+  let word = '';
+  let targetText = `Pass ${colour}`;
+  let call = targetText;
+  if (scenario === 'control') {
+    const dir = drawShuffled(DIRECTIONS, touchOrder);
+    arrow = dir.arrow;
+    word = `Touch ${dir.word.toLowerCase()}`;
+    call = `${word}, ${targetText}`;
+  } else if (scenario === 'turnDribble') {
+    word = drawShuffled(TURNS, turnOrder);
+    targetText = `Dribble ${colour}`;
+    call = `${word} ${targetText}`;
   }
 
-  const target = COLORS[Kit.pick(prefs.colors)];
-  render({ state: 'done', arrow: dir?.arrow, word: dir?.word, target, status: 'Tap Go for the next rep.' });
-  Kit.beep({ freq: 1500, ms: 100 });
-  Kit.speak(target.name);
+  render({ state: 'done', arrow, word, target, targetText, status: 'Tap Go for the next rep.' });
+  Kit.beep({ freq: 1500, ms: 100 }); // beep first: speech can lag a beat
+  Kit.speak(call.toLowerCase());
   reps += 1;
   $('#reps').textContent = `${reps} rep${reps === 1 ? '' : 's'}`;
 }
@@ -663,7 +692,7 @@ function setRunning(running) {
 }
 
 // `target` is an entry from COLORS, or null before the cone is called.
-function render({ state, arrow = '', word = '', target = null, status = '' }) {
+function render({ state, arrow = '', word = '', target = null, targetText = '', status = '' }) {
   panel.dataset.state = state;
   if (target) {
     panel.dataset.color = target.name.toLowerCase();
@@ -674,7 +703,7 @@ function render({ state, arrow = '', word = '', target = null, status = '' }) {
   }
   $('#arrow').textContent = arrow;
   $('#word').textContent = word;
-  $('#target').textContent = target ? target.name : '';
+  $('#target').textContent = targetText;
   $('#status').textContent = status;
 }
 </script>

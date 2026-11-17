@@ -9,7 +9,7 @@ Small training apps for soccer players. Each app is one self-contained HTML file
 
 | App | Type | What it does |
 | --- | --- | --- |
-| [Look Up and Pass](apps/look-up-and-pass.html) | Live session | Play the ball off a wall and pass to the coloured cone that's called (2 to 4 stations). *Control Touch First* calls a direction for your first touch before the cone; *One Touch Pass* calls only the cone, to pass first time |
+| [Look Up and Pass](apps/look-up-and-pass.html) | Live session | Set up 2 to 4 coloured cones. *Control Touch First* calls “touch back, pass yellow,” *One Touch Pass* calls “pass orange,” and *Turn and Dribble* calls “turn left dribble red.” *Mixed* shuffles the three drills and uses each once before reshuffling. All modes share the countdown and cone colours, and call each selected colour once per shuffle. |
 | [Sound check](apps/sound-check.html) | Utility | Tests beeps, the voice and screen-awake on a device before a live session |
 
 ## Running the apps
