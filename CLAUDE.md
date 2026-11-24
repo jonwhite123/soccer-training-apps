@@ -28,12 +28,13 @@ Targets: desktop Chrome/Safari and **iPhone Safari**. Design and check for the p
 - Edit `shared/*`, never the inlined copy, then run `node scripts/sync-shared.mjs` to update every page. `--check` exits 1 if any copy is stale.
 - App-specific CSS and JS go in their own `<style>`/`<script>` after the shared block.
 - Move code into the kit only once a second app needs it.
+- The live apps and Sound check also inline `shared/field-voice.js` before `kit.js`. It synthesizes Field voice from compact cue profiles. To add a phrase, update `CUES` in `scripts/build-field-voice.py`, run it with Flite 2.2, NumPy and SciPy, then sync the shared blocks.
 
 `Kit` API (options are documented in `shared/kit.js`):
 
 - `Kit.unlock()`: call inside the Start tap handler. iOS needs it before any sound or speech.
 - `Kit.beep({freq, ms, volume, type, delay})`, `Kit.beeps(n, opts)`: synthesized tones scheduled on the audio clock.
-- `Kit.speak(text, opts)` returns a Promise; `Kit.hush()` stops speech. Uses the voice and speed saved in Sound check.
+- `Kit.speak(text, opts)` returns a Promise. `Kit.hush()` stops speech. Field voice is the default for the built-in phrases. For a phrase outside that set, call `Kit.unlock({ primeSpeech: true })` to prime device speech during the Start tap.
 - `Kit.keepAwake(on)` returns a Promise of a boolean: the screen wake lock, re-acquired when the page is visible again.
 - `Kit.run(drill)` returns `{ stop(), done }`. Inside `drill(signal)`, use `await Kit.sleep(ms, signal)` so Stop exits at once.
 - `Kit.rand`, `Kit.randInt`, `Kit.pick`, `Kit.shuffle`, `Kit.store.get/set` (namespaced localStorage that never throws; key app data by app name) and `Kit.support()`.

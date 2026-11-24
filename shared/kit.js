@@ -19,11 +19,15 @@
   };
 
   // ---- Audio ----------------------------------------------------------------
+  const Audio = window.AudioContext || window.webkitAudioContext;
+  const audioLead = 0.05; // let the output route wake before the first sample
   let ctx = null;
+  let resetAudioOnTap = false;
   let speechPrimed = false;
 
   function audio() {
-    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (!Audio) return null;
+    if (!ctx || ctx.state === 'closed') ctx = new Audio();
     // iOS suspends or "interrupts" the context after calls and app switches.
     if (ctx.state !== 'running') ctx.resume().catch(() => {});
     return ctx;
@@ -31,22 +35,43 @@
 
   // Call inside a tap/click handler before the first cue: iOS won't start audio
   // or speech any other way. Skip priming when the tap itself speaks a phrase.
-  function unlock({ primeSpeech = true } = {}) {
+  function unlock({ primeSpeech = Boolean(speech.voice) } = {}) {
+    const recover = resetAudioOnTap || ctx?.state === 'interrupted';
+    if (recover) {
+      stopFieldSpeech();
+      if (ctx && ctx.state !== 'closed') ctx.close().catch(() => {});
+      ctx = null;
+      resetAudioOnTap = false;
+    }
     // iOS 17+: behave like a media app so the ring/silent switch doesn't mute cues.
-    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    try {
+      const session = navigator.audioSession;
+      if (session) {
+        // Reapply the playback category after iOS interrupts the output route.
+        if (recover && session.type === 'playback') session.type = 'auto';
+        if (session.type !== 'playback') session.type = 'playback';
+      }
+    } catch (e) {}
     const c = audio();
-    const src = c.createBufferSource(); // a silent sample wakes the output route
-    src.buffer = c.createBuffer(1, 1, 22050);
-    src.connect(c.destination);
-    src.start(0);
-    if (primeSpeech && !speechPrimed) speak('Go', { volume: 0 });
+    if (c) {
+      const src = c.createBufferSource();
+      src.buffer = c.createBuffer(1, 1, c.sampleRate);
+      src.connect(c.destination);
+      src.onended = () => src.disconnect();
+      src.start();
+    }
+    if (primeSpeech && !speechPrimed) {
+      const voice = selectedVoice();
+      if (voice || !speech.voice) speakDevice('Go', { rate: speech.rate, pitch: 1, volume: 0 }, voice);
+    }
   }
 
   // A short tone. Square waves carry best through phone speakers outdoors.
   // `delay` (ms) schedules on the audio clock, so patterns stay tight.
   function beep({ freq = 1000, ms = 150, volume = 0.5, type = 'square', delay = 0 } = {}) {
     const c = audio();
-    const start = c.currentTime + delay / 1000;
+    if (!c) return;
+    const start = c.currentTime + audioLead + delay / 1000;
     const end = start + ms / 1000;
     const osc = c.createOscillator();
     const gain = c.createGain();
@@ -68,21 +93,68 @@
   }
 
   // ---- Speech ---------------------------------------------------------------
-  // Voice and speed are chosen in Sound check and shared by every app on the same origin.
-  const speech = { voice: store.get('voice', null), rate: store.get('rate', 1.1) };
+  // A device voice is an explicit opt-in. Older saved selections used device
+  // speech even when it was silent, so start those installs on Field voice too.
+  const speech = { voice: store.get('cue-voice', null), rate: store.get('rate', 1.1) };
+  const fieldCalls = new Set();
 
   function voices() {
     return 'speechSynthesis' in window ? speechSynthesis.getVoices().filter((voice) => voice.localService) : [];
   }
 
-  function setVoice(name) { speech.voice = name || null; store.set('voice', speech.voice); }
+  function selectedVoice() {
+    return speech.voice ? voices().find((voice) => voice.name === speech.voice) : undefined;
+  }
+
+  function setVoice(name) { speech.voice = name || null; store.set('cue-voice', speech.voice); }
   function setRate(rate) { speech.rate = rate; store.set('rate', rate); }
 
   // Speak a cue, cutting off anything still being said. Resolves with whether
-  // speech played, with a timeout because iOS sometimes never fires `end`.
+  // the browser reported completion. Other phrases can use device speech.
   function speak(text, { rate = speech.rate, pitch = 1, volume = 1, interrupt = true } = {}) {
+    if (interrupt) hush();
+    const options = { rate, pitch, volume };
+    const voice = selectedVoice();
+    const field = !voice && Audio ? FieldVoice.render(text, options) : null;
+    if (field) return speakField(field, volume);
+    return speakDevice(text, options, voice);
+  }
+
+  function speakField({ samples, sampleRate }, volume) {
+    const c = audio();
+    const buffer = c.createBuffer(1, samples.length, sampleRate);
+    buffer.getChannelData(0).set(samples);
+
+    const source = c.createBufferSource();
+    const gain = c.createGain();
+    source.buffer = buffer;
+    gain.gain.value = volume;
+    source.connect(gain);
+    gain.connect(c.destination);
+
+    return new Promise((resolve) => {
+      const finish = (ok) => {
+        clearTimeout(timer);
+        fieldCalls.delete(stop);
+        source.onended = null;
+        source.disconnect();
+        gain.disconnect();
+        resolve(ok);
+      };
+      const stop = () => {
+        source.onended = null;
+        source.stop();
+        finish(false);
+      };
+      const timer = setTimeout(stop, buffer.duration * 1000 + 1200);
+      fieldCalls.add(stop);
+      source.onended = () => finish(true);
+      source.start(c.currentTime + audioLead);
+    });
+  }
+
+  function speakDevice(text, { rate, pitch, volume }, selected) {
     if (!('speechSynthesis' in window)) return Promise.resolve(false);
-    if (interrupt && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.rate = rate;
     u.pitch = pitch;
@@ -94,7 +166,7 @@
     const local = voices();
     const matching = local.filter((v) => v.lang.toLowerCase().split('-')[0] === baseLang);
     const locale = (navigator.language || lang).toLowerCase();
-    const voice = local.find((v) => v.name === speech.voice)
+    const voice = selected
       ?? matching.find((v) => v.lang.toLowerCase() === lang)
       ?? matching.find((v) => v.default)
       ?? matching.find((v) => v.lang.toLowerCase() === locale)
@@ -117,8 +189,13 @@
     });
   }
 
+  function stopFieldSpeech() {
+    for (const stop of fieldCalls) stop();
+  }
+
   function hush() {
-    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    stopFieldSpeech();
+    if (window.speechSynthesis?.speaking || window.speechSynthesis?.pending) speechSynthesis.cancel();
   }
 
   // ---- Screen wake lock -----------------------------------------------------
@@ -143,7 +220,10 @@
 
   // The browser drops the lock, and may suspend audio, whenever the page is hidden.
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible') return;
+    if (document.visibilityState !== 'visible') {
+      if (ctx && isIOS()) resetAudioOnTap = true;
+      return;
+    }
     if (wantAwake) keepAwake(true);
     if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {});
   });
@@ -188,13 +268,16 @@
   }
 
   // ---- Environment ----------------------------------------------------------
-  function support() {
-    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+  function isIOS() {
+    return /iPhone|iPad|iPod/.test(navigator.userAgent) ||
       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  }
+
+  function support() {
     return {
-      ios,
-      webAudio: !!(window.AudioContext || window.webkitAudioContext),
-      speech: 'speechSynthesis' in window,
+      ios: isIOS(),
+      webAudio: Boolean(Audio),
+      speech: Boolean(Audio) || 'speechSynthesis' in window,
       wakeLock: 'wakeLock' in navigator,
       silentSwitchOverride: 'audioSession' in navigator,
       standalone: matchMedia('(display-mode: standalone)').matches || navigator.standalone === true,
