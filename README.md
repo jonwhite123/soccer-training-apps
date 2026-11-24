@@ -32,6 +32,8 @@ Copying a single HTML file to an iPhone doesn't work well on its own. Safari can
 3. Keep the app on screen. Phones pause web pages when the screen locks or you switch apps. The apps ask the screen to stay on; if Sound check says that isn't supported, set Auto-Lock to Never for the session.
 4. Outdoors, a Bluetooth speaker helps a lot.
 
+Sound check defaults to **Field voice**, which generates the training calls offline. You can select an installed device voice from the same menu.
+
 ## Working on the apps
 
 - `apps/`: the apps, one file each
