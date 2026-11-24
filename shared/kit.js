@@ -30,8 +30,8 @@
   }
 
   // Call inside a tap/click handler before the first cue: iOS won't start audio
-  // or speech any other way. Safe to call repeatedly.
-  function unlock() {
+  // or speech any other way. Skip priming when the tap itself speaks a phrase.
+  function unlock({ primeSpeech = true } = {}) {
     // iOS 17+: behave like a media app so the ring/silent switch doesn't mute cues.
     try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
     const c = audio();
@@ -39,12 +39,7 @@
     src.buffer = c.createBuffer(1, 1, 22050);
     src.connect(c.destination);
     src.start(0);
-    if (!speechPrimed && 'speechSynthesis' in window) {
-      const u = new SpeechSynthesisUtterance(' ');
-      u.volume = 0;
-      speechSynthesis.speak(u);
-      speechPrimed = true;
-    }
+    if (primeSpeech && !speechPrimed) speak('Go', { volume: 0 });
   }
 
   // A short tone. Square waves carry best through phone speakers outdoors.
@@ -77,27 +72,48 @@
   const speech = { voice: store.get('voice', null), rate: store.get('rate', 1.1) };
 
   function voices() {
-    return 'speechSynthesis' in window ? speechSynthesis.getVoices() : [];
+    return 'speechSynthesis' in window ? speechSynthesis.getVoices().filter((voice) => voice.localService) : [];
   }
 
   function setVoice(name) { speech.voice = name || null; store.set('voice', speech.voice); }
   function setRate(rate) { speech.rate = rate; store.set('rate', rate); }
 
-  // Speak a cue, cutting off anything still being said. Resolves when done, or
-  // after a timeout because iOS sometimes never fires `end`.
+  // Speak a cue, cutting off anything still being said. Resolves with whether
+  // speech played, with a timeout because iOS sometimes never fires `end`.
   function speak(text, { rate = speech.rate, pitch = 1, volume = 1, interrupt = true } = {}) {
-    if (!('speechSynthesis' in window)) return Promise.resolve();
+    if (!('speechSynthesis' in window)) return Promise.resolve(false);
     if (interrupt && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.rate = rate;
     u.pitch = pitch;
     u.volume = volume;
-    const v = speech.voice && voices().find((x) => x.name === speech.voice);
-    if (v) { u.voice = v; u.lang = v.lang; }
+    // Safari can stay silent with an implicit voice when the exact device locale
+    // is unavailable. Pick an installed voice that matches the app language.
+    const lang = (document.documentElement.lang || 'en').toLowerCase();
+    const baseLang = lang.split('-')[0];
+    const local = voices();
+    const matching = local.filter((v) => v.lang.toLowerCase().split('-')[0] === baseLang);
+    const locale = (navigator.language || lang).toLowerCase();
+    const voice = local.find((v) => v.name === speech.voice)
+      ?? matching.find((v) => v.lang.toLowerCase() === lang)
+      ?? matching.find((v) => v.default)
+      ?? matching.find((v) => v.lang.toLowerCase() === locale)
+      ?? matching[0];
+    if (voice) u.voice = voice;
+    u.lang = voice?.lang ?? (lang === 'en' ? 'en-US' : lang);
+
     return new Promise((resolve) => {
-      const timer = setTimeout(resolve, 1500 + text.length * 150);
-      u.onend = u.onerror = () => { clearTimeout(timer); resolve(); };
-      speechSynthesis.speak(u);
+      let started = false;
+      const finish = (ok) => {
+        clearTimeout(timer);
+        u.onstart = u.onend = u.onerror = null;
+        resolve(ok);
+      };
+      const timer = setTimeout(() => finish(started), 1500 + text.length * 150);
+      u.onstart = () => { started = speechPrimed = true; };
+      u.onend = () => { speechPrimed = true; finish(true); };
+      u.onerror = () => finish(false);
+      try { speechSynthesis.speak(u); } catch (e) { finish(false); }
     });
   }
 

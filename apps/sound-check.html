@@ -153,7 +153,7 @@ input[type="checkbox"], input[type="radio"] { width: 22px; min-height: 22px; acc
 <main class="wrap">
   <p><a href="../index.html">← All apps</a></p>
   <h1>Sound check</h1>
-  <p class="muted">Run this on the phone before a live session. If you can hear the beeps and the voice here, the training apps will work too.</p>
+  <p class="muted">Test the beeps and spoken cues on this phone before a live session.</p>
 
   <section class="card stack">
     <h2>1. Beeps</h2>
@@ -168,7 +168,7 @@ input[type="checkbox"], input[type="radio"] { width: 22px; min-height: 22px; acc
     <h2>2. Voice</h2>
     <div>
       <label for="voice">Voice</label>
-      <select id="voice"><option value="">Device default</option></select>
+        <select id="voice"><option value="">Automatic</option></select>
     </div>
     <div>
       <label for="rate">Speed: <span id="rateOut"></span></label>
@@ -180,6 +180,7 @@ input[type="checkbox"], input[type="radio"] { width: 22px; min-height: 22px; acc
       <button data-say="Time!">Time!</button>
     </div>
     <p id="voiceNote" class="muted">Your voice and speed are saved for the other apps opened from the same place.</p>
+    <p id="voiceResult" class="muted" role="status" hidden></p>
   </section>
 
   <section class="card stack">
@@ -239,8 +240,8 @@ input[type="checkbox"], input[type="radio"] { width: 22px; min-height: 22px; acc
   }
 
   // Call inside a tap/click handler before the first cue: iOS won't start audio
-  // or speech any other way. Safe to call repeatedly.
-  function unlock() {
+  // or speech any other way. Skip priming when the tap itself speaks a phrase.
+  function unlock({ primeSpeech = true } = {}) {
     // iOS 17+: behave like a media app so the ring/silent switch doesn't mute cues.
     try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
     const c = audio();
@@ -248,12 +249,7 @@ input[type="checkbox"], input[type="radio"] { width: 22px; min-height: 22px; acc
     src.buffer = c.createBuffer(1, 1, 22050);
     src.connect(c.destination);
     src.start(0);
-    if (!speechPrimed && 'speechSynthesis' in window) {
-      const u = new SpeechSynthesisUtterance(' ');
-      u.volume = 0;
-      speechSynthesis.speak(u);
-      speechPrimed = true;
-    }
+    if (primeSpeech && !speechPrimed) speak('Go', { volume: 0 });
   }
 
   // A short tone. Square waves carry best through phone speakers outdoors.
@@ -286,27 +282,48 @@ input[type="checkbox"], input[type="radio"] { width: 22px; min-height: 22px; acc
   const speech = { voice: store.get('voice', null), rate: store.get('rate', 1.1) };
 
   function voices() {
-    return 'speechSynthesis' in window ? speechSynthesis.getVoices() : [];
+    return 'speechSynthesis' in window ? speechSynthesis.getVoices().filter((voice) => voice.localService) : [];
   }
 
   function setVoice(name) { speech.voice = name || null; store.set('voice', speech.voice); }
   function setRate(rate) { speech.rate = rate; store.set('rate', rate); }
 
-  // Speak a cue, cutting off anything still being said. Resolves when done, or
-  // after a timeout because iOS sometimes never fires `end`.
+  // Speak a cue, cutting off anything still being said. Resolves with whether
+  // speech played, with a timeout because iOS sometimes never fires `end`.
   function speak(text, { rate = speech.rate, pitch = 1, volume = 1, interrupt = true } = {}) {
-    if (!('speechSynthesis' in window)) return Promise.resolve();
+    if (!('speechSynthesis' in window)) return Promise.resolve(false);
     if (interrupt && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.rate = rate;
     u.pitch = pitch;
     u.volume = volume;
-    const v = speech.voice && voices().find((x) => x.name === speech.voice);
-    if (v) { u.voice = v; u.lang = v.lang; }
+    // Safari can stay silent with an implicit voice when the exact device locale
+    // is unavailable. Pick an installed voice that matches the app language.
+    const lang = (document.documentElement.lang || 'en').toLowerCase();
+    const baseLang = lang.split('-')[0];
+    const local = voices();
+    const matching = local.filter((v) => v.lang.toLowerCase().split('-')[0] === baseLang);
+    const locale = (navigator.language || lang).toLowerCase();
+    const voice = local.find((v) => v.name === speech.voice)
+      ?? matching.find((v) => v.lang.toLowerCase() === lang)
+      ?? matching.find((v) => v.default)
+      ?? matching.find((v) => v.lang.toLowerCase() === locale)
+      ?? matching[0];
+    if (voice) u.voice = voice;
+    u.lang = voice?.lang ?? (lang === 'en' ? 'en-US' : lang);
+
     return new Promise((resolve) => {
-      const timer = setTimeout(resolve, 1500 + text.length * 150);
-      u.onend = u.onerror = () => { clearTimeout(timer); resolve(); };
-      speechSynthesis.speak(u);
+      let started = false;
+      const finish = (ok) => {
+        clearTimeout(timer);
+        u.onstart = u.onend = u.onerror = null;
+        resolve(ok);
+      };
+      const timer = setTimeout(() => finish(started), 1500 + text.length * 150);
+      u.onstart = () => { started = speechPrimed = true; };
+      u.onend = () => { speechPrimed = true; finish(true); };
+      u.onerror = () => finish(false);
+      try { speechSynthesis.speak(u); } catch (e) { finish(false); }
     });
   }
 
@@ -416,7 +433,7 @@ const BEEPS = {
   triple: () => Kit.beeps(3, { freq: 1000, ms: 120, gap: 90 }),
 };
 document.querySelectorAll('[data-beep]').forEach((btn) => {
-  btn.addEventListener('click', () => { Kit.unlock(); BEEPS[btn.dataset.beep](); });
+  btn.addEventListener('click', () => { Kit.unlock({ primeSpeech: false }); BEEPS[btn.dataset.beep](); });
 });
 
 // ---- Voice ------------------------------------------------------------------
@@ -430,7 +447,7 @@ function fillVoices() {
   const all = Kit.voices();
   const mine = all.filter((v) => v.lang.toLowerCase().startsWith(lang));
   const list = (mine.length ? mine : all).slice().sort((a, b) => a.name.localeCompare(b.name));
-  voiceSel.length = 1; // keep "Device default"
+  voiceSel.length = 1; // keep "Automatic"
   for (const v of list) voiceSel.add(new Option(`${v.name} (${v.lang})`, v.name));
   voiceSel.value = list.some((v) => v.name === Kit.speech.voice) ? Kit.speech.voice : '';
   voiceNote.textContent = all.length ? SAVED_NOTE
@@ -446,8 +463,19 @@ const showRate = () => { $('#rateOut').textContent = `${Number(rate.value).toFix
 showRate();
 rate.addEventListener('input', () => { showRate(); Kit.setRate(Number(rate.value)); });
 
+const voiceResult = $('#voiceResult');
+let voiceTest = 0;
 document.querySelectorAll('[data-say]').forEach((btn) => {
-  btn.addEventListener('click', () => { Kit.unlock(); Kit.speak(btn.dataset.say); });
+  btn.addEventListener('click', async () => {
+    const test = ++voiceTest;
+    voiceResult.hidden = true;
+    // This phrase already starts speech inside the tap, so skip the silent primer.
+    Kit.unlock({ primeSpeech: false });
+    const ok = await Kit.speak(btn.dataset.say);
+    if (test !== voiceTest || ok) return;
+    voiceResult.textContent = 'The browser could not play the phrase. Try another voice if one is listed.';
+    voiceResult.hidden = false;
+  });
 });
 
 // ---- Wake lock --------------------------------------------------------------
